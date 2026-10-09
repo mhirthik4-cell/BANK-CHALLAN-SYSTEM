@@ -1,0 +1,339 @@
+# ==========================================================
+# BANK DEPOSIT / WITHDRAWAL CHALLAN SYSTEM
+# Candidates
+# ==========================================================
+
+# Install ReportLab automatically in Google Colab
+!pip -q install reportlab
+
+from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from google.colab import files
+
+
+# ==========================================================
+# FUNCTION: CONVERT AMOUNT INTO WORDS
+# ==========================================================
+
+def amount_in_words(number):
+    ones = [
+        "", "One", "Two", "Three", "Four", "Five", "Six", "Seven",
+        "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen",
+        "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen",
+        "Nineteen"
+    ]
+
+    tens = [
+        "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty",
+        "Seventy", "Eighty", "Ninety"
+    ]
+
+    if number == 0:
+        return "Zero Rupees Only"
+
+    if number < 20:
+        return ones[number] + " Rupees Only"
+
+    if number < 100:
+        return tens[number // 10] + (
+            " " + ones[number % 10] if number % 10 != 0 else ""
+        ) + " Rupees Only"
+
+    if number < 1000:
+        return ones[number // 100] + " Hundred " + (
+            amount_in_words(number % 100).replace(" Rupees Only", "")
+            if number % 100 != 0 else ""
+        ) + " Rupees Only"
+
+    if number < 100000:
+        return amount_in_words(number // 1000).replace(
+            " Rupees Only", ""
+        ) + " Thousand " + (
+            amount_in_words(number % 1000).replace(
+                " Rupees Only", ""
+            )
+            if number % 1000 != 0 else ""
+        ) + " Rupees Only"
+
+    return str(number) + " Rupees Only"
+
+
+# ==========================================================
+# FUNCTION: CREATE PDF CHALLAN
+# ==========================================================
+
+def create_challan(data, pdf_name):
+    pdf = canvas.Canvas(pdf_name, pagesize=A4)
+
+    page_width, page_height = A4
+
+    left = 15 * mm
+    top = page_height - 15 * mm
+    challan_width = page_width - 30 * mm
+    challan_height = 150 * mm
+    bottom = top - challan_height
+
+    # Main rectangle shape of challan
+    pdf.setLineWidth(1.2)
+    pdf.rect(left, bottom, challan_width, challan_height)
+
+    # Challan heading
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawCentredString(
+        page_width / 2,
+        top - 10 * mm,
+        "BANK DEPOSIT / WITHDRAWAL CHALLAN"
+    )
+
+    pdf.setFont("Helvetica", 9)
+    pdf.drawCentredString(
+        page_width / 2,
+        top - 16 * mm,
+        "For Educational Project Use Only"
+    )
+
+    pdf.line(left, top - 20 * mm, left + challan_width, top - 20 * mm)
+
+    # Bank and candidate details
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(left + 5 * mm, top - 28 * mm, "Bank Name:")
+    pdf.drawString(left + 110 * mm, top - 28 * mm, "Date:")
+
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(left + 33 * mm, top - 28 * mm, data["bank"])
+    pdf.drawString(left + 122 * mm, top - 28 * mm, data["date"])
+
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(left + 5 * mm, top - 37 * mm, "Branch:")
+    pdf.drawString(left + 110 * mm, top - 37 * mm, "IFSC Code:")
+
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(left + 25 * mm, top - 37 * mm, data["branch"])
+    pdf.drawString(left + 132 * mm, top - 37 * mm, data["ifsc"])
+
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(left + 5 * mm, top - 46 * mm, "Candidate Name:")
+
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(left + 42 * mm, top - 46 * mm, data["name"])
+
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(left + 5 * mm, top - 55 * mm, "Account Number:")
+
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(left + 42 * mm, top - 55 * mm, data["account"])
+
+    # Cash denomination table
+    table_top = top - 65 * mm
+    table_bottom = top - 110 * mm
+
+    pdf.rect(
+        left + 5 * mm,
+        table_bottom,
+        challan_width - 10 * mm,
+        table_top - table_bottom
+    )
+
+    column_1 = left + 5 * mm
+    column_2 = left + 55 * mm
+    column_3 = left + 110 * mm
+    column_4 = left + challan_width - 5 * mm
+
+    pdf.line(column_2, table_bottom, column_2, table_top)
+    pdf.line(column_3, table_bottom, column_3, table_top)
+    pdf.line(column_1, table_top - 8 * mm, column_4, table_top - 8 * mm)
+
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawCentredString(
+        (column_1 + column_2) / 2,
+        table_top - 5 * mm,
+        "Denomination"
+    )
+    pdf.drawCentredString(
+        (column_2 + column_3) / 2,
+        table_top - 5 * mm,
+        "Number of Notes"
+    )
+    pdf.drawCentredString(
+        (column_3 + column_4) / 2,
+        table_top - 5 * mm,
+        "Amount"
+    )
+
+    denominations = [500, 200, 100]
+    row_y = table_top - 15 * mm
+
+    pdf.setFont("Helvetica", 10)
+
+    for note in denominations:
+        count = data["notes"][note]
+        note_total = note * count
+
+        pdf.drawCentredString(
+            (column_1 + column_2) / 2,
+            row_y,
+            f"Rs. {note}"
+        )
+        pdf.drawCentredString(
+            (column_2 + column_3) / 2,
+            row_y,
+            str(count)
+        )
+        pdf.drawCentredString(
+            (column_3 + column_4) / 2,
+            row_y,
+            f"Rs. {note_total}"
+        )
+
+        pdf.line(
+            column_1,
+            row_y - 4 * mm,
+            column_4,
+            row_y - 4 * mm
+        )
+
+        row_y -= 9 * mm
+
+    # Transaction details
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(left + 5 * mm, top - 119 * mm, "Transaction Type:")
+    pdf.drawString(left + 5 * mm, top - 128 * mm, "Total Amount:")
+    pdf.drawString(left + 5 * mm, top - 137 * mm, "Amount in Words:")
+
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(
+        left + 47 * mm,
+        top - 119 * mm,
+        data["transaction_type"]
+    )
+    pdf.drawString(
+        left + 47 * mm,
+        top - 128 * mm,
+        f"Rs. {data['total_amount']:.2f}"
+    )
+    pdf.drawString(
+        left + 47 * mm,
+        top - 137 * mm,
+        data["amount_words"]
+    )
+
+    # Signature
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(
+        left + 5 * mm,
+        bottom + 7 * mm,
+        "Candidate Signature: __________________________"
+    )
+
+    pdf.save()
+
+
+# ==========================================================
+# INPUT DETAILS FOR ONE CANDIDATE
+# ==========================================================
+
+print("========== BANK CHALLAN SYSTEM ==========")
+print("Enter details for ONE candidate only.\n")
+
+bank_name = input("Enter bank name: ")
+branch_name = input("Enter branch name: ")
+candidate_name = input("Enter candidate name: ")
+account_number = input("Enter account number: ")
+ifsc_code = input("Enter IFSC code: ")
+
+# AUTO-GENERATED DATE AND TIME
+date = datetime.now().strftime("%d-%m-%Y")
+date_and_time = datetime.now().strftime("%d-%m-%Y %I:%M %p")
+
+print("\nAutomatic Date:", date)
+print("Automatic Date and Time:", date_and_time)
+
+opening_balance = float(input("\nEnter current/opening balance: Rs. "))
+
+transaction_type = input(
+    "Enter transaction type (deposit/withdrawal): "
+).strip().lower()
+
+while transaction_type not in ["deposit", "withdrawal"]:
+    transaction_type = input(
+        "Please type only deposit or withdrawal: "
+    ).strip().lower()
+
+notes_500 = int(input("Number of Rs. 500 notes: "))
+notes_200 = int(input("Number of Rs. 200 notes: "))
+notes_100 = int(input("Number of Rs. 100 notes: "))
+
+total_amount = (
+    (notes_500 * 500) +
+    (notes_200 * 200) +
+    (notes_100 * 100)
+)
+
+if transaction_type == "withdrawal":
+    withdrawal = total_amount
+
+    if withdrawal > opening_balance:
+        print("\nERROR: Withdrawal amount is greater than available balance.")
+        print("Please run the code again and enter a smaller amount.")
+        raise SystemExit
+
+    final_balance = opening_balance - withdrawal
+
+else:
+    withdrawal = 0
+    final_balance = opening_balance + total_amount
+
+
+# ==========================================================
+# STORE CHALLAN DATA
+# ==========================================================
+
+challan_data = {
+    "bank": bank_name,
+    "branch": branch_name,
+    "name": candidate_name,
+    "account": account_number,
+    "ifsc": ifsc_code,
+    "date": date,
+    "transaction_type": transaction_type.upper(),
+    "notes": {
+        500: notes_500,
+        200: notes_200,
+        100: notes_100
+    },
+    "total_amount": total_amount,
+    "amount_words": amount_in_words(int(total_amount))
+}
+
+pdf_file_name = "bank_challan.pdf"
+
+create_challan(challan_data, pdf_file_name)
+
+
+# ==========================================================
+# FINAL SQUARE SUMMARY
+# Shows only requested details
+# ==========================================================
+
+print("\n")
+print("+" + "-" * 58 + "+")
+print("|                    FINAL SUMMARY                     |")
+print("+" + "-" * 58 + "+")
+
+print(f"| Bank Name      : {bank_name:<40} |")
+print(f"| Candidate Name : {candidate_name:<40} |")
+print(f"| Date and Time  : {date_and_time:<40} |")
+print(f"| Withdrawals    : Rs. {withdrawal:<35.2f} |")
+print(f"| Balance        : Rs. {final_balance:<35.2f} |")
+
+print("+" + "-" * 58 + "+")
+
+
+# ==========================================================
+# DOWNLOAD THE PDF FILE IN GOOGLE COLAB
+# ==========================================================
+
+print("\nYour challan PDF is ready. Download will start now.")
+files.download(pdf_file_name)
